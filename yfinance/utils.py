@@ -56,6 +56,15 @@ user_agent_headers = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
 
 
+# Quick hack to globally-cache cookie & crumb
+reuse_cookie = True
+reuse_crumb = True
+# reuse_cookie = False
+# reuse_crumb = False
+cookie = None
+crumb = None
+crumb_timestamp = None
+
 # From https://stackoverflow.com/a/59128615
 def attributes(obj):
     disallowed_names = {
