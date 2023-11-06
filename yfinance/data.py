@@ -64,6 +64,22 @@ class TickerData:
         if self._session_is_caching and utils.cookie is None:
             utils.print_once("!! WARNING: cookie & crumb does not work well with requests_cache. Am using requests_cache.cache_disabled() to ensure cookie & crumb are fresh, but that isn't thread-safe.")
 
+        # Default to using 'csrf' strategy
+        self.cookie_mode = 'csrf'
+        # If it fails, then fallback method is 'basic'
+        # self.cookie_mode = 'basic'
+
+    def _toggle_cookie_strategy(self):
+        if self.cookie_mode == 'csrf':
+            utils.get_yf_logger().debug(f'toggling cookie strategy {self.cookie_mode} -> basic')
+            self._session.cookies.clear()
+            self.cookie_mode = 'basic'
+        else:
+            utils.get_yf_logger().debug(f'toggling cookie strategy {self.cookie_mode} -> csrf')
+            self.cookie_mode = 'csrf'
+        utils.cookie = None
+        utils.crumb = None
+
     @utils.log_indent_decorator
     def _save_session_cookies(self):
         fn = os.path.join(utils._DBManager.get_location(), 'session-cookies.pkl')
@@ -127,11 +143,13 @@ class TickerData:
             allow_redirects=True)
 
         if not response.cookies:
+            utils.get_yf_logger().debug(f"response.cookies = None")
             return None
         utils.cookie = list(response.cookies)[0]
         if utils.cookie == '':
+            utils.get_yf_logger().debug(f"list(response.cookies)[0] = ''")
             return None
-        utils.get_yf_logger().debug(f"cookie = '{utils.cookie}'")
+        utils.get_yf_logger().debug(f"fetched {self.cookie_mode} cookie = {utils.cookie}")
         return utils.cookie
 
     @utils.log_indent_decorator
@@ -145,32 +163,36 @@ class TickerData:
             return None
 
         # - 'allow_redirects' copied from @psychoz971 solution - does it help USA?
+        get_args = {
+            'url': "https://query1.finance.yahoo.com/v1/test/getcrumb",
+            'headers': self.user_agent_headers,
+            'cookies': {cookie.name: cookie.value},
+            'proxies': proxy,
+            'timeout': timeout,
+            'allow_redirects': True
+        }
         if self._session_is_caching:
             with self._session.cache_disabled():
-                crumb_response = self._session.get(
-                    url="https://query1.finance.yahoo.com/v1/test/getcrumb",
-                    headers=self.user_agent_headers,
-                    cookies={cookie.name: cookie.value},
-                    proxies=proxy,
-                    timeout=timeout,
-                    allow_redirects=True)
+                crumb_response = self._session.get(**get_args)
         else:
-            crumb_response = self._session.get(
-                url="https://query1.finance.yahoo.com/v1/test/getcrumb",
-                headers=self.user_agent_headers,
-                cookies={cookie.name: cookie.value},
-                proxies=proxy,
-                timeout=timeout,
-                allow_redirects=True)
+            crumb_response = self._session.get(**get_args)
         utils.crumb = crumb_response.text
         if utils.crumb is None or '<html>' in utils.crumb:
             return None
 
         utils.get_yf_logger().debug(f"crumb = '{utils.crumb}'")
         return utils.crumb
+    
+    @utils.log_indent_decorator
+    def _get_cookie_and_crumb_basic(self, proxy, timeout):
+        cookie = self._get_cookie_basic(proxy, timeout)
+        crumb = self._get_crumb_basic(proxy, timeout)
+        self._save_cookie_basic(cookie)
+        utils.get_yf_logger().debug(f"_get_cookie_and_crumb_basic() returning: {cookie}, {crumb}")
+        return cookie, crumb
 
     @utils.log_indent_decorator
-    def _get_cookie_botunit(self, proxy, timeout):
+    def _get_cookie_csrf(self, proxy, timeout):
         if utils.reuse_cookie and utils.cookie is not None:
             utils.get_yf_logger().debug('reusing cookie')
             return True
@@ -180,19 +202,17 @@ class TickerData:
             utils.cookie = True
             return True
 
+        base_args = {
+            'headers': self.user_agent_headers,
+            'proxies': proxy,
+            'timeout': timeout}
+
+        get_args = base_args | {'url': 'https://guce.yahoo.com/consent'}
         if self._session_is_caching:
             with self._session.cache_disabled():
-                response = self._session.get(
-                                    url='https://guce.yahoo.com/consent', 
-                                    headers=self.user_agent_headers,
-                                    proxies=proxy,
-                                    timeout=timeout)
+                response = self._session.get(**get_args)
         else:
-            response = self._session.get(
-                                url='https://guce.yahoo.com/consent', 
-                                headers=self.user_agent_headers,
-                                proxies=proxy,
-                                timeout=timeout)
+            response = self._session.get(**get_args)
 
         soup = BeautifulSoup(response.content, 'html.parser')
         csrfTokenInput = soup.find('input', attrs={'name': 'csrfToken'})
@@ -214,60 +234,44 @@ class TickerData:
             'originalDoneUrl': originalDoneUrl,
             'namespace': namespace,
         }
+        post_args = base_args | {
+            'url': f'https://consent.yahoo.com/v2/collectConsent?sessionId={sessionId}',
+            'data': data}
+        get_args = base_args | {
+            'url': f'https://guce.yahoo.com/copyConsent?sessionId={sessionId}',
+            'data': data}
         if self._session_is_caching:
             with self._session.cache_disabled():
-                self._session.post(
-                            url=f'https://consent.yahoo.com/v2/collectConsent?sessionId={sessionId}',
-                            data=data,
-                            headers=self.user_agent_headers,
-                            proxies=proxy,
-                            timeout=timeout)
-                self._session.get(
-                            url=f'https://guce.yahoo.com/copyConsent?sessionId={sessionId}', 
-                            data=data,
-                            headers=self.user_agent_headers,
-                            proxies=proxy,
-                            timeout=timeout)
+                self._session.post(**post_args)
+                self._session.get(**get_args)
         else:
-            self._session.post(
-                        url=f'https://consent.yahoo.com/v2/collectConsent?sessionId={sessionId}',
-                        data=data,
-                        headers=self.user_agent_headers,
-                        proxies=proxy,
-                        timeout=timeout)
-            self._session.get(
-                        url=f'https://guce.yahoo.com/copyConsent?sessionId={sessionId}',
-                        headers=self.user_agent_headers,
-                        proxies=proxy,
-                        timeout=timeout)
+            self._session.post(**post_args)
+            self._session.get(**get_args)
         utils.cookie = True
         return True
 
     @utils.log_indent_decorator
-    def _get_crumb_botunit(self, proxy=None, timeout=30):
+    def _get_crumb_csrf(self, proxy=None, timeout=30):
         # Credit goes to @bot-unit #1729
 
         if utils.reuse_crumb and utils.crumb is not None:
             utils.get_yf_logger().debug('reusing crumb')
             return utils.crumb
 
-        if not self._get_cookie_botunit(proxy, timeout):
+        if not self._get_cookie_csrf(proxy, timeout):
             # This cookie stored in session
             return None
 
+        get_args = {
+            'url': 'https://query2.finance.yahoo.com/v1/test/getcrumb', 
+            'headers': self.user_agent_headers,
+            'proxies': proxy,
+            'timeout': timeout}
         if self._session_is_caching:
             with self._session.cache_disabled():
-                r = self._session.get(
-                            url='https://query2.finance.yahoo.com/v1/test/getcrumb', 
-                            headers=self.user_agent_headers,
-                            proxies=proxy,
-                            timeout=timeout)
+                r = self._session.get(**get_args)
         else:
-            r = self._session.get(
-                        url='https://query2.finance.yahoo.com/v1/test/getcrumb', 
-                        headers=self.user_agent_headers,
-                        proxies=proxy,
-                        timeout=timeout)
+            r = self._session.get(**get_args)
         utils.crumb = r.text
 
         if utils.crumb is None or '<html>' in utils.crumb or utils.crumb == '':
@@ -280,14 +284,27 @@ class TickerData:
     def _get_cookie_and_crumb(self, proxy=None, timeout=30):
         cookie, crumb = None, None
 
-        crumb = self._get_crumb_botunit()
-        if crumb is not None:
-            self._save_session_cookies()
+        utils.get_yf_logger().debug(f"cookie_mode = '{self.cookie_mode}'")
+
+        if self.cookie_mode == 'csrf':
+            crumb = self._get_crumb_csrf()
+            if crumb is not None:
+                # Good
+                self._save_session_cookies()
+            else:
+                # Fail
+                self._toggle_cookie_strategy()
+                cookie, crumb = self._get_cookie_and_crumb_basic(proxy, timeout)
         else:
             # Fallback strategy
-            cookie = self._get_cookie_basic(proxy, timeout)
-            crumb = self._get_crumb_basic(proxy, timeout)
-            self._save_cookie_basic(cookie)
+            cookie, crumb = self._get_cookie_and_crumb_basic(proxy, timeout)
+            if cookie is None or crumb is None:
+                # Fail
+                self._toggle_cookie_strategy()
+                crumb = self._get_crumb_csrf()
+                if crumb is not None:
+                    # Good
+                    self._save_session_cookies()
 
         return cookie, crumb
 
@@ -316,13 +333,25 @@ class TickerData:
         else:
             cookies = None
 
-        response = self._session.get(
-            url=url,
-            params=params,
-            cookies=cookies,
-            proxies=proxy,
-            timeout=timeout,
-            headers=user_agent_headers or self.user_agent_headers)
+        request_args = {
+            'url': url,
+            'params': params,
+            'cookies': cookies,
+            'proxies': proxy,
+            'timeout': timeout,
+            'headers': user_agent_headers or self.user_agent_headers
+        }
+
+        response = self._session.get(**request_args)
+        
+        # retry with fallback cookie and crumb if default strategy failed
+        if response.status_code >= 400 and cookie is None:
+            self._toggle_cookie_strategy()
+            cookie, crumb = self._get_cookie_and_crumb(proxy, timeout)
+            request_args['params']['crumb'] = crumb
+            request_args['cookies'] = {cookie.name: cookie.value}
+            response = self._session.get(**request_args)
+
         return response
 
     @lru_cache_freezeargs
