@@ -320,6 +320,8 @@ class TickerData:
 
     @utils.log_indent_decorator
     def get(self, url, user_agent_headers=None, params=None, proxy=None, timeout=30):
+        # Important: treat input arguments as immutable.
+
         if len(url) > 200:
             utils.get_yf_logger().debug(f'get(): {url[:200]}...')
         else:
@@ -333,12 +335,14 @@ class TickerData:
 
         # Be careful which URLs get a crumb, because crumb breaks some fetches
         cookie, crumb = None, None
-        need_crumb = 'finance/quoteSummary' in url
-        # need_crumb = True
+        # need_crumb = 'finance/quoteSummary' in url
+        need_crumb = True
         if need_crumb:
             cookie, crumb = self._get_cookie_and_crumb()
         if crumb is not None:
-            params['crumb'] = crumb
+            crumbs = {'crumb': crumb}
+        else:
+            crumbs = {}
         if self._cookie_strategy == 'basic' and cookie is not None:
             # Basic cookie strategy adds cookie to GET parameters
             cookies = {cookie.name: cookie.value}
@@ -347,7 +351,7 @@ class TickerData:
 
         request_args = {
             'url': url,
-            'params': params,
+            'params': params | crumbs,
             'cookies': cookies,
             'proxies': proxy,
             'timeout': timeout,
