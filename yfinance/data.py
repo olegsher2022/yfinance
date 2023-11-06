@@ -333,8 +333,8 @@ class TickerData:
 
         # Be careful which URLs get a crumb, because crumb breaks some fetches
         cookie, crumb = None, None
-        # need_crumb = 'finance/quoteSummary' in url
-        need_crumb = True
+        need_crumb = 'finance/quoteSummary' in url
+        # need_crumb = True
         if need_crumb:
             cookie, crumb = self._get_cookie_and_crumb()
         if crumb is not None:
