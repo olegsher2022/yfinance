@@ -66,18 +66,18 @@ class TickerData:
             utils.print_once("!! WARNING: cookie & crumb does not work well with requests_cache. Am using requests_cache.cache_disabled() to ensure cookie & crumb are fresh, but that isn't thread-safe.")
 
         # Default to using 'csrf' strategy
-        self.cookie_mode = 'csrf'
+        # self._cookie_strategy = 'csrf'
         # If it fails, then fallback method is 'basic'
-        # self.cookie_mode = 'basic'
+        self._cookie_strategy = 'basic'
 
     def _toggle_cookie_strategy(self):
-        if self.cookie_mode == 'csrf':
-            utils.get_yf_logger().debug(f'toggling cookie strategy {self.cookie_mode} -> basic')
+        if self._cookie_strategy == 'csrf':
+            utils.get_yf_logger().debug(f'toggling cookie strategy {self._cookie_strategy} -> basic')
             self._session.cookies.clear()
-            self.cookie_mode = 'basic'
+            self._cookie_strategy = 'basic'
         else:
-            utils.get_yf_logger().debug(f'toggling cookie strategy {self.cookie_mode} -> csrf')
-            self.cookie_mode = 'csrf'
+            utils.get_yf_logger().debug(f'toggling cookie strategy {self._cookie_strategy} -> csrf')
+            self._cookie_strategy = 'csrf'
         utils.cookie = None
         utils.crumb = None
 
@@ -160,7 +160,7 @@ class TickerData:
         if utils.cookie == '':
             utils.get_yf_logger().debug(f"list(response.cookies)[0] = ''")
             return None
-        utils.get_yf_logger().debug(f"fetched {self.cookie_mode} cookie = {utils.cookie}")
+        utils.get_yf_logger().debug(f"fetched {self._cookie_strategy} cookie = {utils.cookie}")
         return utils.cookie
 
     @utils.log_indent_decorator
@@ -295,9 +295,9 @@ class TickerData:
     def _get_cookie_and_crumb(self, proxy=None, timeout=30):
         cookie, crumb = None, None
 
-        utils.get_yf_logger().debug(f"cookie_mode = '{self.cookie_mode}'")
+        utils.get_yf_logger().debug(f"cookie_mode = '{self._cookie_strategy}'")
 
-        if self.cookie_mode == 'csrf':
+        if self._cookie_strategy == 'csrf':
             crumb = self._get_crumb_csrf()
             if crumb is not None:
                 # Good
@@ -338,8 +338,8 @@ class TickerData:
             cookie, crumb = self._get_cookie_and_crumb()
         if crumb is not None:
             params['crumb'] = crumb
-        if cookie is not None:
-            # USA fallback adds cookie to GET parameters
+        if self._cookie_strategy == 'basic':
+            # Basic cookie strategy adds cookie to GET parameters
             cookies = {cookie.name: cookie.value}
         else:
             cookies = None
@@ -352,15 +352,15 @@ class TickerData:
             'timeout': timeout,
             'headers': user_agent_headers or self.user_agent_headers
         }
-
         response = self._session.get(**request_args)
-        
-        # retry with fallback cookie and crumb if default strategy failed
-        if response.status_code >= 400 and cookie is None:
+
+        if response.status_code >= 400:
+            # Retry with other cookie strategy
             self._toggle_cookie_strategy()
             cookie, crumb = self._get_cookie_and_crumb(proxy, timeout)
             request_args['params']['crumb'] = crumb
-            request_args['cookies'] = {cookie.name: cookie.value}
+            if self._cookie_strategy == 'basic':
+                request_args['cookies'] = {cookie.name: cookie.value}
             response = self._session.get(**request_args)
 
         return response
