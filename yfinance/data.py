@@ -60,10 +60,14 @@ class TickerData:
             # Not caching
             self._session_is_caching = False
         else:
-            # Is caching
+            # Is caching. This is annoying. 
+            # Can't simply use a non-caching session to fetch cookie & crumb, 
+            # because then the caching-session won't have cookie.
             self._session_is_caching = True
+            from requests_cache import DO_NOT_CACHE
+            self._expire_after = DO_NOT_CACHE
         if self._session_is_caching and utils.cookie is None:
-            utils.print_once("!! WARNING: cookie & crumb does not work well with requests_cache. Am using requests_cache.cache_disabled() to ensure cookie & crumb are fresh, but that isn't thread-safe.")
+            utils.print_once("WARNING: cookie & crumb does not work well with requests_cache. Am experimenting with 'expire_after=DO_NOT_CACHE', but you need to help stress-test.")
 
         # Default to using 'csrf' strategy
         # self._cookie_strategy = 'csrf'
@@ -103,6 +107,7 @@ class TickerData:
                 with open(fn, 'rb') as file:
                     cookies = pickle.load(file)
                     self._session.cookies.update(cookies)
+                    utils.get_yf_logger().debug('loaded persistent cookie')
                     return True
             except:
                 return False
@@ -129,6 +134,7 @@ class TickerData:
                     cookie = pickle.load(file)
                 if cookie == '':
                     cookie = None
+                utils.get_yf_logger().debug('loaded persistent cookie')
                 return cookie
             except:
                 return None
@@ -183,8 +189,8 @@ class TickerData:
             'allow_redirects': True
         }
         if self._session_is_caching:
-            with self._session.cache_disabled():
-                crumb_response = self._session.get(**get_args)
+            get_args['expire_after'] = self._expire_after
+            crumb_response = self._session.get(**get_args)
         else:
             crumb_response = self._session.get(**get_args)
         utils.crumb = crumb_response.text
@@ -219,8 +225,8 @@ class TickerData:
 
         get_args = base_args | {'url': 'https://guce.yahoo.com/consent'}
         if self._session_is_caching:
-            with self._session.cache_disabled():
-                response = self._session.get(**get_args)
+            get_args['expire_after'] = self._expire_after
+            response = self._session.get(**get_args)
         else:
             response = self._session.get(**get_args)
 
@@ -251,9 +257,10 @@ class TickerData:
             'url': f'https://guce.yahoo.com/copyConsent?sessionId={sessionId}',
             'data': data}
         if self._session_is_caching:
-            with self._session.cache_disabled():
-                self._session.post(**post_args)
-                self._session.get(**get_args)
+            post_args['expire_after'] = self._expire_after
+            get_args['expire_after'] = self._expire_after
+            self._session.post(**post_args)
+            self._session.get(**get_args)
         else:
             self._session.post(**post_args)
             self._session.get(**get_args)
@@ -278,8 +285,8 @@ class TickerData:
             'proxies': proxy,
             'timeout': timeout}
         if self._session_is_caching:
-            with self._session.cache_disabled():
-                r = self._session.get(**get_args)
+            get_args['expire_after'] = self._expire_after
+            r = self._session.get(**get_args)
         else:
             r = self._session.get(**get_args)
         utils.crumb = r.text
@@ -323,9 +330,10 @@ class TickerData:
         # Important: treat input arguments as immutable.
 
         if len(url) > 200:
-            utils.get_yf_logger().debug(f'get(): {url[:200]}...')
+            utils.get_yf_logger().debug(f'url={url[:200]}...')
         else:
-            utils.get_yf_logger().debug(f'get(): {url}')
+            utils.get_yf_logger().debug(f'url={url}')
+        utils.get_yf_logger().debug(f'params={params}')
         proxy = self._get_proxy(proxy)
 
         if params is None:
