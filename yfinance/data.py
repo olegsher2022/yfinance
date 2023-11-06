@@ -10,6 +10,7 @@ import random
 import time
 import pickle
 import os
+import datetime
 
 from frozendict import frozendict
 
@@ -93,6 +94,11 @@ class TickerData:
     def _load_session_cookies(self):
         fn = os.path.join(utils._DBManager.get_location(), 'session-cookies.pkl')
         if os.path.exists(fn):
+            # Periodically refresh, 24 hours seems fair.
+            mod_dt = datetime.datetime.fromtimestamp(os.path.getmtime(fn))
+            if (datetime.datetime.now() - mod_dt) > datetime.timedelta(days=1):
+                # Too old
+                return False
             try:
                 with open(fn, 'rb') as file:
                     cookies = pickle.load(file)
@@ -113,6 +119,11 @@ class TickerData:
     def _load_cookie_basic(self):
         fn = os.path.join(utils._DBManager.get_location(), 'cookie.pkl')
         if os.path.exists(fn):
+            # Periodically refresh, 24 hours seems fair.
+            mod_dt = datetime.datetime.fromtimestamp(os.path.getmtime(fn))
+            if (datetime.datetime.now() - mod_dt) > datetime.timedelta(days=1):
+                # Too old
+                return False
             try:
                 with open(fn, 'rb') as file:
                     cookie = pickle.load(file)
