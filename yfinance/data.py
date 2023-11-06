@@ -333,7 +333,9 @@ class TickerData:
 
         # Be careful which URLs get a crumb, because crumb breaks some fetches
         cookie, crumb = None, None
-        if 'finance/quoteSummary' in url:
+        # need_crumb = 'finance/quoteSummary' in url
+        need_crumb = True
+        if need_crumb:
             cookie, crumb = self._get_cookie_and_crumb()
         if crumb is not None:
             params['crumb'] = crumb
@@ -353,7 +355,7 @@ class TickerData:
         }
         response = self._session.get(**request_args)
 
-        if response.status_code >= 400:
+        if response.status_code >= 400 and need_crumb:
             # Retry with other cookie strategy
             self._toggle_cookie_strategy()
             cookie, crumb = self._get_cookie_and_crumb(proxy, timeout)
