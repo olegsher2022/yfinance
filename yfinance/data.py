@@ -160,7 +160,7 @@ class TickerData:
         if utils.cookie == '':
             utils.get_yf_logger().debug(f"list(response.cookies)[0] = ''")
             return None
-        utils.get_yf_logger().debug(f"fetched {self._cookie_strategy} cookie = {utils.cookie}")
+        utils.get_yf_logger().debug(f"fetched basic cookie = {utils.cookie}")
         return utils.cookie
 
     @utils.log_indent_decorator
@@ -199,7 +199,6 @@ class TickerData:
         cookie = self._get_cookie_basic(proxy, timeout)
         crumb = self._get_crumb_basic(proxy, timeout)
         self._save_cookie_basic(cookie)
-        utils.get_yf_logger().debug(f"_get_cookie_and_crumb_basic() returning: {cookie}, {crumb}")
         return cookie, crumb
 
     @utils.log_indent_decorator
@@ -338,7 +337,7 @@ class TickerData:
             cookie, crumb = self._get_cookie_and_crumb()
         if crumb is not None:
             params['crumb'] = crumb
-        if self._cookie_strategy == 'basic':
+        if self._cookie_strategy == 'basic' and cookie is not None:
             # Basic cookie strategy adds cookie to GET parameters
             cookies = {cookie.name: cookie.value}
         else:
