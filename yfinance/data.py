@@ -69,10 +69,10 @@ class TickerData:
         if self._session_is_caching and utils.cookie is None:
             utils.print_once("WARNING: cookie & crumb does not work well with requests_cache. Am experimenting with 'expire_after=DO_NOT_CACHE', but you need to help stress-test.")
 
-        # Default to using 'csrf' strategy
-        # self._cookie_strategy = 'csrf'
-        # If it fails, then fallback method is 'basic'
+        # Default to using 'basic' strategy
         self._cookie_strategy = 'basic'
+        # If it fails, then fallback method is 'csrf'
+        # self._cookie_strategy = 'csrf'
 
     def _toggle_cookie_strategy(self):
         if self._cookie_strategy == 'csrf':
@@ -166,6 +166,7 @@ class TickerData:
         if utils.cookie == '':
             utils.get_yf_logger().debug(f"list(response.cookies)[0] = ''")
             return None
+        self.self._save_cookie_basic(cookie)
         utils.get_yf_logger().debug(f"fetched basic cookie = {utils.cookie}")
         return utils.cookie
 
@@ -204,7 +205,6 @@ class TickerData:
     def _get_cookie_and_crumb_basic(self, proxy, timeout):
         cookie = self._get_cookie_basic(proxy, timeout)
         crumb = self._get_crumb_basic(proxy, timeout)
-        self._save_cookie_basic(cookie)
         return cookie, crumb
 
     @utils.log_indent_decorator
@@ -265,6 +265,7 @@ class TickerData:
             self._session.post(**post_args)
             self._session.get(**get_args)
         utils.cookie = True
+        self._save_session_cookies()
         return True
 
     @utils.log_indent_decorator
@@ -305,10 +306,7 @@ class TickerData:
 
         if self._cookie_strategy == 'csrf':
             crumb = self._get_crumb_csrf()
-            if crumb is not None:
-                # Good
-                self._save_session_cookies()
-            else:
+            if crumb is None:
                 # Fail
                 self._toggle_cookie_strategy()
                 cookie, crumb = self._get_cookie_and_crumb_basic(proxy, timeout)
@@ -319,9 +317,6 @@ class TickerData:
                 # Fail
                 self._toggle_cookie_strategy()
                 crumb = self._get_crumb_csrf()
-                if crumb is not None:
-                    # Good
-                    self._save_session_cookies()
 
         return cookie, crumb
 
