@@ -14,7 +14,7 @@ import datetime
 
 from frozendict import frozendict
 
-from . import utils
+from . import utils, cache
 
 cache_maxsize = 64
 
@@ -87,58 +87,38 @@ class TickerData:
 
     @utils.log_indent_decorator
     def _save_session_cookies(self):
-        fn = os.path.join(utils._DBManager.get_location(), 'session-cookies.pkl')
         try:
-            with open(fn, 'wb') as file:
-                pickle.dump(self._session.cookies, file)
-            return True
-        except:
+            cache.get_cookie_cache().store('csrf', self._session.cookies)
+        except Exception as e:
             return False
+        return True
+
     @utils.log_indent_decorator
     def _load_session_cookies(self):
-        fn = os.path.join(utils._DBManager.get_location(), 'session-cookies.pkl')
-        if os.path.exists(fn):
-            # Periodically refresh, 24 hours seems fair.
-            mod_dt = datetime.datetime.fromtimestamp(os.path.getmtime(fn))
-            if (datetime.datetime.now() - mod_dt) > datetime.timedelta(days=1):
-                # Too old
-                return False
-            try:
-                with open(fn, 'rb') as file:
-                    cookies = pickle.load(file)
-                    self._session.cookies.update(cookies)
-                    utils.get_yf_logger().debug('loaded persistent cookie')
-                    return True
-            except:
-                return False
-        return False
+        cookie_dict = cache.get_cookie_cache().lookup('csrf')
+        if cookie_dict is None:
+            return False
+        # Periodically refresh, 24 hours seems fair.
+        if cookie_dict['age'] > datetime.timedelta(days=1):
+            return False
+        self._session.cookies.update(cookie_dict['cookie'])
+        utils.get_yf_logger().debug('loaded persistent cookie')
 
     def _save_cookie_basic(self, cookie):
-        fn = os.path.join(utils._DBManager.get_location(), 'cookie.pkl')
         try:
-            with open(fn, 'wb') as file:
-                pickle.dump(cookie, file)
-            return True
-        except:
+            cache.get_cookie_cache().store('basic', cookie)
+        except Exception as e:
             return False
+        return True
     def _load_cookie_basic(self):
-        fn = os.path.join(utils._DBManager.get_location(), 'cookie.pkl')
-        if os.path.exists(fn):
-            # Periodically refresh, 24 hours seems fair.
-            mod_dt = datetime.datetime.fromtimestamp(os.path.getmtime(fn))
-            if (datetime.datetime.now() - mod_dt) > datetime.timedelta(days=1):
-                # Too old
-                return False
-            try:
-                with open(fn, 'rb') as file:
-                    cookie = pickle.load(file)
-                if cookie == '':
-                    cookie = None
-                utils.get_yf_logger().debug('loaded persistent cookie')
-                return cookie
-            except:
-                return None
-        return None
+        cookie_dict = cache.get_cookie_cache().lookup('basic')
+        if cookie_dict is None:
+            return None
+        # Periodically refresh, 24 hours seems fair.
+        if cookie_dict['age'] > datetime.timedelta(days=1):
+            return None
+        utils.get_yf_logger().debug('loaded persistent cookie')
+        return cookie_dict['cookie']
 
     @utils.log_indent_decorator
     def _get_cookie_basic(self, proxy=None, timeout=30):
@@ -166,7 +146,7 @@ class TickerData:
         if utils.cookie == '':
             utils.get_yf_logger().debug(f"list(response.cookies)[0] = ''")
             return None
-        self.self._save_cookie_basic(cookie)
+        self._save_cookie_basic(utils.cookie)
         utils.get_yf_logger().debug(f"fetched basic cookie = {utils.cookie}")
         return utils.cookie
 

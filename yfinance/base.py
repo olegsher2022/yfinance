@@ -34,8 +34,7 @@ import numpy as np
 import pandas as pd
 import requests
 
-from . import shared
-from . import utils
+from . import shared, utils, cache
 from .data import TickerData
 from .scrapers.analysis import Analysis
 from .scrapers.fundamentals import Fundamentals
@@ -1641,12 +1640,12 @@ class TickerBase:
     def _get_ticker_tz(self, proxy, timeout):
         if self._tz is not None:
             return self._tz
-        cache = utils.get_tz_cache()
-        tz = cache.lookup(self.ticker)
+        c = cache.get_tz_cache()
+        tz = c.lookup(self.ticker)
 
         if tz and not utils.is_valid_timezone(tz):
             # Clear from cache and force re-fetch
-            cache.store(self.ticker, None)
+            c.store(self.ticker, None)
             tz = None
 
         if tz is None:
@@ -1654,7 +1653,7 @@ class TickerBase:
 
             if utils.is_valid_timezone(tz):
                 # info fetch is relatively slow so cache timezone
-                cache.store(self.ticker, tz)
+                c.store(self.ticker, tz)
             else:
                 # tz = None
                 raise Exception(f"_fetch_ticker_tz() has returned None for '{self.ticker}', will cause problems. Investigate")
