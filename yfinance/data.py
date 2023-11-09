@@ -104,12 +104,14 @@ class TickerData:
         self._session.cookies.update(cookie_dict['cookie'])
         utils.get_yf_logger().debug('loaded persistent cookie')
 
+    @utils.log_indent_decorator
     def _save_cookie_basic(self, cookie):
         try:
             cache.get_cookie_cache().store('basic', cookie)
         except Exception as e:
             return False
         return True
+    @utils.log_indent_decorator
     def _load_cookie_basic(self):
         cookie_dict = cache.get_cookie_cache().lookup('basic')
         if cookie_dict is None:

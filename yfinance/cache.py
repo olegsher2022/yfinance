@@ -357,7 +357,6 @@ class _CookieCache:
         try:
             data =  _CookieSchema.get(_CookieSchema.strategy == strategy)
             cookie = _pkl.loads(data.cookie_bytes)
-            # return cookie
             return {'cookie':cookie, 'age':_datetime.datetime.now()-data.fetch_date}
         except _CookieSchema.DoesNotExist:
             return None
@@ -376,9 +375,9 @@ class _CookieCache:
         if db is None:
             return
         try:
+            q = _CookieSchema.delete().where(_CookieSchema.strategy == strategy)
+            q.execute()
             if cookie is None:
-                q = _CookieSchema.delete().where(_CookieSchema.strategy == strategy)
-                q.execute()
                 return
             with db.atomic():
                 cookie_pkl = _pkl.dumps(cookie, _pkl.HIGHEST_PROTOCOL)
