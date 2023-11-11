@@ -1655,8 +1655,7 @@ class TickerBase:
                 # info fetch is relatively slow so cache timezone
                 c.store(self.ticker, tz)
             else:
-                # tz = None
-                raise Exception(f"_fetch_ticker_tz() has returned None for '{self.ticker}', will cause problems. Investigate")
+                tz = None
 
         self._tz = tz
         return tz
