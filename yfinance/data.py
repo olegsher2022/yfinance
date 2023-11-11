@@ -52,7 +52,7 @@ class TickerData:
 
     def __init__(self, ticker: str, session=None):
         self.ticker = ticker
-        self._session = session or requests
+        self._session = session or requests.Session()
 
         try:
             self._session.cache
